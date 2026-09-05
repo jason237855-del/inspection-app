@@ -12,4 +12,9 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  // Hard-pin the deploy target to Vercel (Build Output API) instead of the
+  // Cloudflare default, since this project now deploys via Vercel.
+  nitro: {
+    preset: "vercel",
+  },
 });

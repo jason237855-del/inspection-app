@@ -27,6 +27,9 @@ dist-ssr
 # Database exports (contain customer PII)
 /db/
 
+# Supabase CLI local cache
+supabase/.temp/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
