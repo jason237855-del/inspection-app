@@ -1,0 +1,2 @@
+ALTER TABLE public.template_categories ADD COLUMN IF NOT EXISTS spaces text[] NOT NULL DEFAULT '{}'::text[];
+ALTER TABLE public.template_items ADD COLUMN IF NOT EXISTS spaces text[] NOT NULL DEFAULT '{}'::text[];
