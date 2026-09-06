@@ -160,3 +160,25 @@
   color: var(--color-foreground);
 }
 
+/* Printing a Dialog (fixed position, clipped overflow) prints garbage by
+   default — hide everything except the report content and lift it out of
+   the dialog's layout so the browser can paginate it normally. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #report-print-area,
+  #report-print-area * {
+    visibility: visible;
+  }
+  #report-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
+

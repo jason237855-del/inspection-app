@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { ChecklistItem } from "@/components/inspection/ChecklistItem";
 import { ChecklistManager } from "@/components/inspection/ChecklistManager";
-import { ReportPreview } from "@/components/inspection/ReportPreview";
+import { ReportPreview, type ReportSpace } from "@/components/inspection/ReportPreview";
 import { SpaceManager } from "@/components/inspection/SpaceManager";
 import { SpaceModulePanel } from "@/components/inspection/SpaceModulePanel";
 import { supabase } from "@/integrations/supabase/client";
@@ -58,6 +58,12 @@ export const Route = createFileRoute("/_authenticated/inspect/$projectId")({
 type ProjectInfo = {
   name: string;
   client_name: string;
+  client_phone: string;
+  address: string;
+  unit: string;
+  developer: string;
+  layout: string;
+  total_ping: number | null;
   inspection_date: string | null;
   notes: string;
   current_round: number;
@@ -129,7 +135,7 @@ function InspectPage() {
   useEffect(() => {
     supabase
       .from("projects")
-      .select("name, client_name, inspection_date, notes, current_round")
+      .select("name, client_name, client_phone, address, unit, developer, layout, total_ping, inspection_date, notes, current_round")
       .eq("id", projectId)
       .maybeSingle()
       .then(({ data }) => setProject((data as ProjectInfo) ?? null));
@@ -204,16 +210,27 @@ function InspectPage() {
 
 
 
-  const itemTitles = useMemo(
-    () =>
-      Object.fromEntries(
-        Object.values(checklist.catsBySpace)
-          .flat()
-          .flatMap((c) => c.items)
-          .map((i) => [i.id, i.title]),
-      ) as Record<string, string>,
-    [checklist.catsBySpace],
-  );
+  /** Per-space, per-category item list for the printed report — deliberately
+   * ignores the on-screen role filter (a formal report shouldn't omit items
+   * just because a particular work role happens to be selected right now),
+   * but still respects the re-inspection round scoping like `groups` does. */
+  const reportSpaces = useMemo<ReportSpace[]>(() => {
+    return checklist.spaces
+      .map((sp) => {
+        const categories = checklist
+          .categoriesFor(sp.id)
+          .map((cat) => {
+            let items = cat.items.filter((i) => !i.hidden);
+            if (currentRound > 1) {
+              items = items.filter((i) => spaces[sp.name]?.items[i.id]);
+            }
+            return { id: cat.id, name: cat.name, items: items.map((i) => ({ id: i.id, title: i.title })) };
+          })
+          .filter((cat) => cat.items.length > 0);
+        return { id: sp.id, name: sp.name, categories };
+      })
+      .filter((sp) => sp.categories.length > 0);
+  }, [checklist, currentRound, spaces]);
 
   const stateOf = (spaceName: string, itemId: string) => spaces[spaceName]?.items[itemId];
   // A carried-over item has a row (status "pending") the moment a round
@@ -702,13 +719,19 @@ function InspectPage() {
       <ReportPreview
         open={reportOpen}
         onOpenChange={setReportOpen}
+        projectId={projectId}
         project={project?.name ?? ""}
         customer={project?.client_name ?? ""}
+        clientPhone={project?.client_phone}
+        address={project?.address}
+        unit={project?.unit}
+        developer={project?.developer}
+        layout={project?.layout}
+        totalPing={project?.total_ping}
         date={project?.inspection_date ?? ""}
         round={currentRound}
         spaces={spaces}
-        spaceNames={spaceNames}
-        itemTitles={itemTitles}
+        reportSpaces={reportSpaces}
       />
     </div>
   );
