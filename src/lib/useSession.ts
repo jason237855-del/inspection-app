@@ -41,11 +41,15 @@ export function useSession() {
       if (alive) setRealRole((data?.[0]?.role as Role) ?? null);
     };
 
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(async ({ data }) => {
       if (!alive) return;
       setUser(data.user ?? null);
-      if (data.user) void loadRole(data.user.id);
-      setLoading(false);
+      if (data.user) {
+        await loadRole(data.user.id);
+      } else {
+        setRealRole(null);
+      }
+      if (alive) setLoading(false);
     });
 
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
