@@ -32,6 +32,7 @@ type Project = {
   assigned_inspector: string | null;
   team_members?: string[] | null;
   status: string;
+  current_round?: number;
 };
 
 type Profile = { id: string; full_name: string; email: string };
@@ -55,12 +56,18 @@ function HomePage() {
     const [p, pr, it] = await Promise.all([
       supabase.from("projects").select("*").order("inspection_date", { ascending: true }),
       supabase.from("profiles").select("id, full_name, email"),
-      supabase.from("inspection_items").select("project_id, status").eq("status", "defect"),
+      supabase.from("inspection_items").select("project_id, status, round").eq("status", "defect"),
     ]);
-    setProjects((p.data as Project[]) ?? []);
+    const projectRows = (p.data as Project[]) ?? [];
+    setProjects(projectRows);
     setProfiles((pr.data as Profile[]) ?? []);
+    // Older rounds keep their rows (never deleted), so only count defects that
+    // belong to each project's currently-active round — otherwise a defect
+    // already resolved in a later round would still be double-counted here.
+    const roundByProject = new Map(projectRows.map((row) => [row.id, row.current_round ?? 1]));
     const counts: Record<string, number> = {};
-    for (const row of (it.data as { project_id: string }[]) ?? []) {
+    for (const row of (it.data as { project_id: string; round: number }[]) ?? []) {
+      if (row.round !== (roundByProject.get(row.project_id) ?? 1)) continue;
       counts[row.project_id] = (counts[row.project_id] ?? 0) + 1;
     }
     setDefects(counts);

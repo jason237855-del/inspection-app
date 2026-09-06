@@ -49,33 +49,39 @@ export type Database = {
       }
       inspection_items: {
         Row: {
+          carried_note: string | null
           id: string
           inspected_by: string
           item_key: string
           note: string
           project_id: string
+          round: number
           space: string
           status: string
           updated_at: string
           values: Json
         }
         Insert: {
+          carried_note?: string | null
           id?: string
           inspected_by?: string
           item_key: string
           note?: string
           project_id: string
+          round?: number
           space: string
           status?: string
           updated_at?: string
           values?: Json
         }
         Update: {
+          carried_note?: string | null
           id?: string
           inspected_by?: string
           item_key?: string
           note?: string
           project_id?: string
+          round?: number
           space?: string
           status?: string
           updated_at?: string
@@ -99,6 +105,7 @@ export type Database = {
           name: string
           path: string
           project_id: string
+          round: number
           space: string
         }
         Insert: {
@@ -108,6 +115,7 @@ export type Database = {
           name?: string
           path: string
           project_id: string
+          round?: number
           space: string
         }
         Update: {
@@ -117,6 +125,7 @@ export type Database = {
           name?: string
           path?: string
           project_id?: string
+          round?: number
           space?: string
         }
         Relationships: [
@@ -530,6 +539,7 @@ export type Database = {
           client_phone: string
           created_at: string
           created_by: string
+          current_round: number
           developer: string
           id: string
           inspection_date: string | null
@@ -558,6 +568,7 @@ export type Database = {
           client_phone?: string
           created_at?: string
           created_by?: string
+          current_round?: number
           developer?: string
           id?: string
           inspection_date?: string | null
@@ -586,6 +597,7 @@ export type Database = {
           client_phone?: string
           created_at?: string
           created_by?: string
+          current_round?: number
           developer?: string
           id?: string
           inspection_date?: string | null

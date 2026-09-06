@@ -448,20 +448,39 @@ export function useProjectChecklist(projectId: string) {
   );
 
   const addItem = useCallback(
-    async (spaceId: string, categoryId: string, title: string) => {
+    async (spaceId: string, categoryId: string, title: string, round = 1) => {
       const clean = title.trim();
       if (!clean) return;
       const cat = (catsBySpace[spaceId] ?? []).find((c) => c.id === categoryId);
-      await supabase.from("project_items").insert({
-        project_id: projectId,
-        space_id: spaceId,
-        category_id: categoryId,
-        title: clean,
-        sort: cat?.items.length ?? 0,
-      });
+      const { data } = await supabase
+        .from("project_items")
+        .insert({
+          project_id: projectId,
+          space_id: spaceId,
+          category_id: categoryId,
+          title: clean,
+          sort: cat?.items.length ?? 0,
+        })
+        .select("id")
+        .single();
+      // Mid-re-inspection, a brand-new item needs a stub result row right away
+      // so it shows up in the round-scoped checklist (it won't have one otherwise
+      // until a status is recorded, which is how round 1 normally works).
+      if (round > 1 && data?.id) {
+        const spaceName = spaces.find((s) => s.id === spaceId)?.name;
+        if (spaceName) {
+          await supabase.from("inspection_items").insert({
+            project_id: projectId,
+            space: spaceName,
+            item_key: data.id,
+            round,
+            status: "pending",
+          });
+        }
+      }
       await load(false);
     },
-    [catsBySpace, load, projectId],
+    [catsBySpace, load, projectId, spaces],
   );
 
   /** Pull a template item into this space only (creates its category if needed). */
@@ -471,6 +490,7 @@ export function useProjectChecklist(projectId: string) {
       catName: string,
       item: { title: string; roles?: InspectRole[]; fields?: ItemField[] },
       catRoles?: InspectRole[],
+      round = 1,
     ) => {
       const list = catsBySpace[spaceId] ?? [];
       let cat = list.find((c) => c.name === catName);
@@ -489,18 +509,34 @@ export function useProjectChecklist(projectId: string) {
         if (!data) return;
         cat = { id: data.id, space_id: spaceId, name: catName, sort: list.length, roles: catRoles ?? [], items: [] };
       }
-      await supabase.from("project_items").insert({
-        project_id: projectId,
-        space_id: spaceId,
-        category_id: cat.id,
-        title: item.title,
-        sort: cat.items.length,
-        roles: item.roles ?? [],
-        ...(item.fields ? { fields: item.fields } : {}),
-      });
+      const { data: newItem } = await supabase
+        .from("project_items")
+        .insert({
+          project_id: projectId,
+          space_id: spaceId,
+          category_id: cat.id,
+          title: item.title,
+          sort: cat.items.length,
+          roles: item.roles ?? [],
+          ...(item.fields ? { fields: item.fields } : {}),
+        })
+        .select("id")
+        .single();
+      if (round > 1 && newItem?.id) {
+        const spaceName = spaces.find((s) => s.id === spaceId)?.name;
+        if (spaceName) {
+          await supabase.from("inspection_items").insert({
+            project_id: projectId,
+            space: spaceName,
+            item_key: newItem.id,
+            round,
+            status: "pending",
+          });
+        }
+      }
       await load(false);
     },
-    [catsBySpace, load, projectId],
+    [catsBySpace, load, projectId, spaces],
   );
 
 

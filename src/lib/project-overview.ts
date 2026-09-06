@@ -26,6 +26,7 @@ export type ProjectRow = {
   video_post_url: string;
   assigned_inspector: string | null;
   team_members: string[];
+  current_round: number;
 };
 
 export type FileRow = { id: string; name: string; path: string; mime: string; url: string };
@@ -43,7 +44,7 @@ export type Metrics = { pending: number; pass: number; defect: number; na: numbe
 export type WindowCount = { space: string; count: number };
 
 const PROJECT_COLUMNS =
-  "id, name, status, client_name, client_phone, address, inspection_date, inspection_time, property_type, total_ping, notes, builder_notes, notes_important, inspection_package, unit, developer, vehicle, video_pre_url, video_post_url, assigned_inspector, team_members";
+  "id, name, status, client_name, client_phone, address, inspection_date, inspection_time, property_type, total_ping, notes, builder_notes, notes_important, inspection_package, unit, developer, vehicle, video_pre_url, video_post_url, assigned_inspector, team_members, current_round";
 
 export function useProjectOverview(projectId: string) {
   const [project, setProject] = useState<ProjectRow | null>(null);
@@ -113,22 +114,49 @@ export function useProjectOverview(projectId: string) {
     [projectId],
   );
 
-  const loadMetrics = useCallback(async () => {
-    const [{ data: configured }, { data: recorded }] = await Promise.all([
-      supabase.from("project_items").select("id").eq("project_id", projectId).eq("hidden", false),
-      supabase.from("inspection_items").select("status").eq("project_id", projectId),
-    ]);
-    const total = configured?.length ?? 0;
-    let pass = 0;
-    let defect = 0;
-    let na = 0;
-    for (const r of recorded ?? []) {
-      if (r.status === "defect") defect += 1;
-      else if (r.status === "na") na += 1;
-      else pass += 1;
-    }
-    setMetrics({ total, pass, defect, na, pending: Math.max(total - pass - defect - na, 0) });
-  }, [projectId]);
+  const loadMetrics = useCallback(
+    async (round: number) => {
+      if (round <= 1) {
+        // Round 1: untouched items have no row at all, so "pending" is the
+        // gap between the full configured checklist and however many rows exist.
+        const [{ data: configured }, { data: recorded }] = await Promise.all([
+          supabase.from("project_items").select("id").eq("project_id", projectId).eq("hidden", false),
+          supabase.from("inspection_items").select("status").eq("project_id", projectId).eq("round", 1),
+        ]);
+        const total = configured?.length ?? 0;
+        let pass = 0;
+        let defect = 0;
+        let na = 0;
+        for (const r of recorded ?? []) {
+          if (r.status === "defect") defect += 1;
+          else if (r.status === "na") na += 1;
+          else if (r.status !== "pending") pass += 1;
+        }
+        setMetrics({ total, pass, defect, na, pending: Math.max(total - pass - defect - na, 0) });
+        return;
+      }
+      // Round 2+: every item in scope was explicitly carried over (or added
+      // during this round), so the row set itself is the whole checklist —
+      // no need to subtract from a separately-configured total.
+      const { data: recorded } = await supabase
+        .from("inspection_items")
+        .select("status")
+        .eq("project_id", projectId)
+        .eq("round", round);
+      let pass = 0;
+      let defect = 0;
+      let na = 0;
+      let pending = 0;
+      for (const r of recorded ?? []) {
+        if (r.status === "defect") defect += 1;
+        else if (r.status === "na") na += 1;
+        else if (r.status === "pending") pending += 1;
+        else pass += 1;
+      }
+      setMetrics({ total: recorded?.length ?? 0, pass, defect, na, pending });
+    },
+    [projectId],
+  );
 
   const loadWindows = useCallback(async () => {
     const { data } = await supabase.from("space_windows").select("space").eq("project_id", projectId);
@@ -148,9 +176,17 @@ export function useProjectOverview(projectId: string) {
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    void Promise.all([loadProject(), loadFiles(), loadPanels(), loadSignatures(), loadMetrics(), loadWindows()]).then(
-      () => alive && setLoading(false),
-    );
+    void (async () => {
+      const row = await loadProject();
+      await Promise.all([
+        loadFiles(),
+        loadPanels(),
+        loadSignatures(),
+        loadMetrics(row?.current_round ?? 1),
+        loadWindows(),
+      ]);
+      if (alive) setLoading(false);
+    })();
     return () => {
       alive = false;
     };
@@ -232,5 +268,6 @@ export function useProjectOverview(projectId: string) {
     saveSignature,
     setStaffRole,
     reloadMetrics: loadMetrics,
+    reloadProject: loadProject,
   };
 }

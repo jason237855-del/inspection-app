@@ -26,7 +26,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { spaceSettings, useProjectChecklist, useTemplateLibrary, type CatDef, type ItemDef, type SpaceDef } from "@/lib/checklist-db";
 import { useProjectInspection } from "@/lib/inspection-db";
 import { blankItem, defectCount } from "@/lib/inspection-store";
-import { ALL_ROLES, ROLE_OPTIONS, matchesRole, type RoleFilter } from "@/lib/roles";
+import type { ItemField } from "@/lib/item-fields";
+import { ALL_ROLES, ROLE_OPTIONS, matchesRole, type InspectRole, type RoleFilter } from "@/lib/roles";
+import { roundLabel } from "@/lib/rounds-db";
 import { useSession } from "@/lib/useSession";
 import { cn } from "@/lib/utils";
 
@@ -53,7 +55,13 @@ export const Route = createFileRoute("/_authenticated/inspect/$projectId")({
   component: InspectPage,
 });
 
-type ProjectInfo = { name: string; client_name: string; inspection_date: string | null; notes: string };
+type ProjectInfo = {
+  name: string;
+  client_name: string;
+  inspection_date: string | null;
+  notes: string;
+  current_round: number;
+};
 
 /** A category name aggregated across every space that contains it. */
 type CatGroup = { name: string; entries: { space: SpaceDef; cat: CatDef; items: ItemDef[] }[] };
@@ -72,6 +80,8 @@ function InspectPage() {
   const { report, status } = Route.useSearch();
   const navigate = useNavigate({ from: "/inspect/$projectId" });
   const checklist = useProjectChecklist(projectId);
+  const [project, setProject] = useState<ProjectInfo | null>(null);
+  const currentRound = project?.current_round ?? 1;
 
   const templateLibrary = useTemplateLibrary(projectId);
   const { user } = useSession();
@@ -94,8 +104,7 @@ function InspectPage() {
     inspectedBy,
     loading,
     saving,
-  } = useProjectInspection(projectId, stamp);
-  const [project, setProject] = useState<ProjectInfo | null>(null);
+  } = useProjectInspection(projectId, currentRound, stamp);
   const [reportOpen, setReportOpen] = useState(report === "1");
   const [spaceMgrOpen, setSpaceMgrOpen] = useState(false);
   const [itemMgrOpen, setItemMgrOpen] = useState(false);
@@ -118,7 +127,7 @@ function InspectPage() {
   useEffect(() => {
     supabase
       .from("projects")
-      .select("name, client_name, inspection_date, notes")
+      .select("name, client_name, inspection_date, notes, current_round")
       .eq("id", projectId)
       .maybeSingle()
       .then(({ data }) => setProject((data as ProjectInfo) ?? null));
@@ -153,7 +162,12 @@ function InspectPage() {
     const index = new Map<string, CatGroup>();
     for (const sp of checklist.spaces) {
       for (const cat of checklist.categoriesFor(sp.id)) {
-        const items = cat.items.filter((i) => !i.hidden && matchesRole(i.roles, roleFilter));
+        let items = cat.items.filter((i) => !i.hidden && matchesRole(i.roles, roleFilter));
+        // Re-inspection rounds only cover items carried over as defects (or
+        // added during this round) — not the full original checklist.
+        if (currentRound > 1) {
+          items = items.filter((i) => spaces[sp.name]?.items[i.id]);
+        }
         if (!items.length && !matchesRole(cat.roles, roleFilter)) continue;
         if (!items.length) continue;
         let g = index.get(cat.name);
@@ -166,7 +180,7 @@ function InspectPage() {
       }
     }
     return out;
-  }, [checklist, roleFilter]);
+  }, [checklist, roleFilter, currentRound, spaces]);
 
   /** Spatial modules become category cards; each lists the spaces where it applies. */
   const spatialCards = useMemo(() => {
@@ -200,6 +214,13 @@ function InspectPage() {
   );
 
   const stateOf = (spaceName: string, itemId: string) => spaces[spaceName]?.items[itemId];
+  // A carried-over item has a row (status "pending") the moment a round
+  // starts, so "has a row" alone no longer means "已檢驗" — it must also not
+  // still be sitting at "pending" (round 1 items never get that status).
+  const isChecked = (spaceName: string, itemId: string) => {
+    const st = stateOf(spaceName, itemId);
+    return !!st && st.status !== "pending";
+  };
   const countOf = (entries: CatGroup["entries"]) => {
     let total = 0;
     let done = 0;
@@ -207,9 +228,8 @@ function InspectPage() {
     for (const e of entries)
       for (const i of e.items) {
         total += 1;
-        const st = stateOf(e.space.name, i.id);
-        if (st) done += 1;
-        if (st?.status === "defect") defects += 1;
+        if (isChecked(e.space.name, i.id)) done += 1;
+        if (stateOf(e.space.name, i.id)?.status === "defect") defects += 1;
       }
     return { total, done, defects };
   };
@@ -252,14 +272,14 @@ function InspectPage() {
   const passStatus = (spaceName: string, id: string) => {
     const st = stateOf(spaceName, id);
     if (statusFilter === "all") return true;
-    if (statusFilter === "pending") return !st;
+    if (statusFilter === "pending") return !st || st.status === "pending";
     if (statusFilter === "pass") return st?.status === "pass";
     if (statusFilter === "na") return st?.status === "na";
     return st?.status === "defect";
   };
 
   const batchPass = (spaceName: string, items: ItemDef[]) => {
-    for (const i of items) if (!stateOf(spaceName, i.id)) setItem(i.id, { status: "pass" }, spaceName);
+    for (const i of items) if (!isChecked(spaceName, i.id)) setItem(i.id, { status: "pass" }, spaceName);
   };
 
   // Structural edits can move or remove recorded data → refresh inspection state.
@@ -309,6 +329,9 @@ function InspectPage() {
                 </h1>
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                <span className="inline-flex items-center rounded-full bg-recheck-soft px-2 py-0.5 font-bold text-recheck">
+                  {roundLabel(currentRound)}
+                </span>
                 <span className="inline-flex items-center gap-1">
                   <User className="h-3.5 w-3.5" />
                   {project?.client_name || "—"}
@@ -528,7 +551,7 @@ function InspectPage() {
           view.page === "items" &&
           openEntries.map(({ space, items }) => {
             const shown = items.filter((i) => passStatus(space.name, i.id));
-            const doneCount = items.filter((i) => stateOf(space.name, i.id)).length;
+            const doneCount = items.filter((i) => isChecked(space.name, i.id)).length;
             return (
               <section key={space.id} className="rounded-2xl border border-border bg-surface p-3 shadow-card">
                 <div className="mb-3 flex items-center justify-between gap-3 px-1">
@@ -648,16 +671,16 @@ function InspectPage() {
         spaceName={activeSpace}
         categories={spaceCategories}
         library={templateLibrary}
-        onAddFromTemplate={(catName, item, catRoles) =>
-          checklist.addFromTemplate(activeSpaceDef?.id ?? "", catName, item, catRoles)
-        }
+        onAddFromTemplate={withReload((catName: string, item: { title: string; roles?: InspectRole[]; fields?: ItemField[] }, catRoles?: InspectRole[]) =>
+          checklist.addFromTemplate(activeSpaceDef?.id ?? "", catName, item, catRoles, currentRound)
+        )}
         onAddCategory={(name: string) => checklist.addCategory(activeSpaceDef?.id ?? "", name)}
         onRenameCategory={checklist.renameCategory}
         onDeleteCategory={withReload((id: string) => checklist.deleteCategory(id))}
         onMoveCategory={(id: string, dir: -1 | 1) => checklist.moveCategory(activeSpaceDef?.id ?? "", id, dir)}
-        onAddItem={(categoryId: string, title: string) =>
-          checklist.addItem(activeSpaceDef?.id ?? "", categoryId, title)
-        }
+        onAddItem={withReload((categoryId: string, title: string) =>
+          checklist.addItem(activeSpaceDef?.id ?? "", categoryId, title, currentRound)
+        )}
         onUpdateItem={checklist.updateItem}
         onSetCategoryRoles={checklist.setCategoryRoles}
         onDeleteItem={withReload((id: string) => checklist.deleteItem(id))}
@@ -672,6 +695,7 @@ function InspectPage() {
         project={project?.name ?? ""}
         customer={project?.client_name ?? ""}
         date={project?.inspection_date ?? ""}
+        round={currentRound}
         spaces={spaces}
         spaceNames={spaceNames}
         itemTitles={itemTitles}

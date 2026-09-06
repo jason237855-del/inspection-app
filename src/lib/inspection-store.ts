@@ -1,6 +1,6 @@
 export type Photo = { id: string; url: string; name: string; path?: string };
 
-export type ItemStatus = "pass" | "defect" | "na";
+export type ItemStatus = "pass" | "defect" | "na" | "pending";
 
 export type ItemState = {
   status: ItemStatus;
@@ -8,6 +8,8 @@ export type ItemState = {
   photos: Photo[];
   /** Custom numeric inputs (length/width/height, moisture %) configured per item. */
   values: Record<string, string>;
+  /** When carried into a re-inspection round, the prior round's defect note (reference only). */
+  carriedNote?: string | undefined;
 };
 
 export type Dimensions = { length: string; width: string; height: string };

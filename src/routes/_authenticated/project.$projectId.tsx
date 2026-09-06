@@ -13,6 +13,7 @@ import {
   Phone,
   Plug,
   Plus,
+  RefreshCw,
   Trash2,
   Upload,
   Users,
@@ -26,6 +27,7 @@ import { useDashboardLayout } from "@/lib/dashboard-layout";
 import { useProjectOverview, type FileRow } from "@/lib/project-overview";
 import { STATUS_META, statusKey } from "@/lib/project-status";
 import { ROLE_OPTIONS } from "@/lib/roles";
+import { roundLabel, startNextRound } from "@/lib/rounds-db";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/project/$projectId")({
@@ -54,10 +56,25 @@ function ProjectOverviewPage() {
   const fileInput = useRef<HTMLInputElement>(null);
   const planInput = useRef<HTMLInputElement>(null);
   const plans = o.files.filter((f) => f.mime.startsWith("image/") || f.mime.includes("pdf"));
+  const [startingRound, setStartingRound] = useState(false);
 
   const p = o.project;
   const status = STATUS_META[statusKey(p?.status)];
   const badge = p?.inspection_package || status.label;
+  const currentRound = p?.current_round ?? 1;
+  const canStartNextRound = o.metrics.pending === 0 && o.metrics.defect > 0;
+
+  const handleNextRound = async () => {
+    if (!window.confirm(`確定要開始「${roundLabel(currentRound + 1)}」嗎？會把目前所有缺失項目複製進下一輪複驗清單。`)) return;
+    setStartingRound(true);
+    try {
+      await startNextRound(projectId, currentRound);
+      await o.reloadProject();
+      await o.reloadMetrics(currentRound + 1);
+    } finally {
+      setStartingRound(false);
+    }
+  };
 
   const tabs = useMemo(() => layout.sections.filter((x) => x.tab_visible), [layout.sections]);
   const orderedBlocks = useMemo(
@@ -76,6 +93,22 @@ function ProjectOverviewPage() {
           <Metric projectId={projectId} status="pass" label="無異常" value={o.metrics.pass} className="bg-pass-soft text-pass" />
           <Metric projectId={projectId} status="defect" label="缺失補驗" value={o.metrics.defect} className="bg-defect-soft text-defect" />
           <Metric projectId={projectId} status="na" label="不適用" value={o.metrics.na} className="bg-recheck-soft text-recheck" />
+        </div>
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <span className="text-xs text-muted-foreground">
+            目前輪次：<span className="font-bold text-foreground">{roundLabel(currentRound)}</span>
+          </span>
+          {canStartNextRound && (
+            <button
+              type="button"
+              onClick={() => void handleNextRound()}
+              disabled={startingRound}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-recheck/30 bg-recheck-soft px-3 text-xs font-bold text-recheck disabled:opacity-60"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              開始{roundLabel(currentRound + 1)}
+            </button>
+          )}
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <Link

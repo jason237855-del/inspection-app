@@ -19,7 +19,7 @@ const num = (v: string) => {
 const str = (v: number | null | undefined) => (v === null || v === undefined ? "" : String(v));
 
 const statusOf = (v: string): ItemState["status"] =>
-  v === "defect" ? "defect" : v === "na" ? "na" : "pass";
+  v === "defect" ? "defect" : v === "na" ? "na" : v === "pending" ? "pending" : "pass";
 
 const asValues = (v: unknown): Record<string, string> => {
   if (!v || typeof v !== "object" || Array.isArray(v)) return {};
@@ -28,7 +28,7 @@ const asValues = (v: unknown): Record<string, string> => {
   );
 };
 
-export function useProjectInspection(projectId: string, stamp?: string) {
+export function useProjectInspection(projectId: string, round: number, stamp?: string) {
   const [spaces, setSpaces] = useState<Record<string, SpaceState>>({});
   const [activeSpace, setActiveSpace] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -40,9 +40,9 @@ export function useProjectInspection(projectId: string, stamp?: string) {
 
   const load = useCallback(async () => {
     const [items, meas, photos] = await Promise.all([
-      supabase.from("inspection_items").select("*").eq("project_id", projectId),
+      supabase.from("inspection_items").select("*").eq("project_id", projectId).eq("round", round),
       supabase.from("space_measurements").select("*").eq("project_id", projectId),
-      supabase.from("inspection_photos").select("*").eq("project_id", projectId),
+      supabase.from("inspection_photos").select("*").eq("project_id", projectId).eq("round", round),
     ]);
 
     const next: Record<string, SpaceState> = {};
@@ -57,6 +57,7 @@ export function useProjectInspection(projectId: string, stamp?: string) {
         note: row.note ?? "",
         photos: [],
         values: asValues((row as { values?: unknown }).values),
+        carriedNote: (row as { carried_note?: string | null }).carried_note ?? undefined,
       };
     }
     for (const row of meas.data ?? []) {
@@ -82,7 +83,7 @@ export function useProjectInspection(projectId: string, stamp?: string) {
     setSpaces(next);
     setInspectedBy(stamps);
     setLoading(false);
-  }, [projectId]);
+  }, [projectId, round]);
 
   useEffect(() => {
     setLoading(true);
@@ -99,9 +100,10 @@ export function useProjectInspection(projectId: string, stamp?: string) {
         { event: "*", schema: "public", table: "inspection_items", filter: `project_id=eq.${projectId}` },
         (payload) => {
           const row = (payload.eventType === "DELETE" ? payload.old : payload.new) as
-            | { space?: string; item_key?: string; status?: string; note?: string; inspected_by?: string }
+            | { space?: string; item_key?: string; status?: string; note?: string; inspected_by?: string; round?: number }
             | undefined;
           if (!row?.space || !row.item_key) return;
+          if ((row.round ?? 1) !== round) return; // change belongs to a different re-inspection round
           const key = `${row.space}:${row.item_key}`;
           if (timers.current[key]) return; // a local edit is still pending for this item
           if (payload.eventType === "DELETE") {
@@ -141,7 +143,7 @@ export function useProjectInspection(projectId: string, stamp?: string) {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [projectId]);
+  }, [projectId, round]);
 
   const spaceState = useCallback((name: string) => spaces[name] ?? emptySpace(), [spaces]);
 
@@ -157,20 +159,21 @@ export function useProjectInspection(projectId: string, stamp?: string) {
           project_id: projectId,
           space,
           item_key: itemId,
+          round,
           status: state.status,
           note: state.note,
           values: state.values ?? {},
           inspected_by: stampRef.current,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "project_id,space,item_key" },
+        { onConflict: "project_id,space,item_key,round" },
       );
       if (stampRef.current) {
         setInspectedBy((prev) => ({ ...prev, [`${space}:${itemId}`]: stampRef.current }));
       }
       setSaving(false);
     },
-    [projectId],
+    [projectId, round],
   );
 
   const setItem = useCallback(
@@ -262,7 +265,7 @@ export function useProjectInspection(projectId: string, stamp?: string) {
         if (up.error) continue;
         const { data } = await supabase
           .from("inspection_photos")
-          .insert({ project_id: projectId, space, item_key: itemId, name: file.name, path })
+          .insert({ project_id: projectId, space, item_key: itemId, round, name: file.name, path })
           .select()
           .single();
         const signed = await supabase.storage.from(BUCKET).createSignedUrl(path, 3600);
@@ -285,7 +288,7 @@ export function useProjectInspection(projectId: string, stamp?: string) {
       }));
       setSaving(false);
     },
-    [activeSpace, patchLocal, projectId],
+    [activeSpace, patchLocal, projectId, round],
   );
 
   const removePhoto = useCallback(

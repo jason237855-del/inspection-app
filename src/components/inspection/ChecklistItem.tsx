@@ -71,6 +71,13 @@ export function ChecklistItem({ title, stamp, fields, state, onChange, onAddPhot
           isDefect ? "border-defect/25 bg-defect-soft/60" : "border-border bg-muted/30",
         )}
       >
+        {state.carriedNote && (
+          <div className="rounded-lg border border-recheck/30 bg-recheck-soft/60 p-3 text-sm">
+            <p className="font-semibold text-recheck">上一輪記錄</p>
+            <p className="mt-0.5 text-muted-foreground">{state.carriedNote}</p>
+          </div>
+        )}
+
         {isDefect && (
           <div className="flex flex-wrap gap-2">
             {QUICK_CHIPS.map((chip) => (

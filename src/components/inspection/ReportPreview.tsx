@@ -1,5 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { areaFromDimensions, defectCount, emptySpace, type SpaceState } from "@/lib/inspection-store";
+import { roundLabel } from "@/lib/rounds-db";
 
 export function ReportPreview({
   open,
@@ -7,6 +8,7 @@ export function ReportPreview({
   project,
   customer,
   date,
+  round = 1,
   spaces,
   spaceNames,
   itemTitles,
@@ -16,6 +18,7 @@ export function ReportPreview({
   project: string;
   customer: string;
   date: string;
+  round?: number;
   spaces: Record<string, SpaceState>;
   spaceNames: string[];
   itemTitles: Record<string, string>;
@@ -34,6 +37,7 @@ export function ReportPreview({
             <p><span className="text-muted-foreground">案場：</span>{project}</p>
             <p><span className="text-muted-foreground">客戶：</span>{customer}</p>
             <p><span className="text-muted-foreground">驗屋日期：</span>{date}</p>
+            <p><span className="text-muted-foreground">輪次：</span>{roundLabel(round)}</p>
             <p><span className="text-muted-foreground">缺失總數：</span>
               <span className="font-bold text-defect">{totalDefects}</span> 項
             </p>
