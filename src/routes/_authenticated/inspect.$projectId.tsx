@@ -663,7 +663,7 @@ function InspectPage() {
         )}
       </main>
 
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 shadow-bar backdrop-blur">
+      <div className="no-print fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 shadow-bar backdrop-blur">
         <div className="mx-auto grid max-w-4xl grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3">
           <div className="flex min-w-0 gap-4">
             <Stat label="項目" value={overall.total} />
