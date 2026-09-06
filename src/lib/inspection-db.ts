@@ -33,6 +33,7 @@ export function useProjectInspection(projectId: string, round: number, stamp?: s
   const [activeSpace, setActiveSpace] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const stampRef = useRef(stamp ?? "");
   stampRef.current = stamp ?? "";
@@ -154,7 +155,7 @@ export function useProjectInspection(projectId: string, round: number, stamp?: s
   const saveItem = useCallback(
     async (space: string, itemId: string, state: ItemState) => {
       setSaving(true);
-      await supabase.from("inspection_items").upsert(
+      const { error } = await supabase.from("inspection_items").upsert(
         {
           project_id: projectId,
           space,
@@ -168,8 +169,13 @@ export function useProjectInspection(projectId: string, round: number, stamp?: s
         },
         { onConflict: "project_id,space,item_key,round" },
       );
-      if (stampRef.current) {
-        setInspectedBy((prev) => ({ ...prev, [`${space}:${itemId}`]: stampRef.current }));
+      if (error) {
+        setSaveError(`儲存失敗，請重新整理頁面後再試一次（${error.message}）`);
+      } else {
+        setSaveError("");
+        if (stampRef.current) {
+          setInspectedBy((prev) => ({ ...prev, [`${space}:${itemId}`]: stampRef.current }));
+        }
       }
       setSaving(false);
     },
@@ -198,7 +204,7 @@ export function useProjectInspection(projectId: string, round: number, stamp?: s
   const saveMeasurement = useCallback(
     async (space: string, dimensions: Dimensions, moisture: Moisture) => {
       setSaving(true);
-      await supabase.from("space_measurements").upsert(
+      const { error } = await supabase.from("space_measurements").upsert(
         {
           project_id: projectId,
           space,
@@ -211,6 +217,7 @@ export function useProjectInspection(projectId: string, round: number, stamp?: s
         },
         { onConflict: "project_id,space" },
       );
+      setSaveError(error ? `儲存失敗，請重新整理頁面後再試一次（${error.message}）` : "");
       setSaving(false);
     },
     [projectId],
@@ -259,15 +266,23 @@ export function useProjectInspection(projectId: string, round: number, stamp?: s
       const space = inSpace || activeSpace;
       setSaving(true);
       const added: Photo[] = [];
+      let failed = 0;
       for (const file of files) {
         const path = `${projectId}/${crypto.randomUUID()}-${file.name.replace(/[^\w.-]/g, "_")}`;
         const up = await supabase.storage.from(BUCKET).upload(path, file);
-        if (up.error) continue;
-        const { data } = await supabase
+        if (up.error) {
+          failed += 1;
+          continue;
+        }
+        const { data, error } = await supabase
           .from("inspection_photos")
           .insert({ project_id: projectId, space, item_key: itemId, round, name: file.name, path })
           .select()
           .single();
+        if (error) {
+          failed += 1;
+          continue;
+        }
         const signed = await supabase.storage.from(BUCKET).createSignedUrl(path, 3600);
         added.push({
           id: data?.id ?? path,
@@ -276,6 +291,7 @@ export function useProjectInspection(projectId: string, round: number, stamp?: s
           path,
         });
       }
+      setSaveError(failed > 0 ? `有 ${failed} 張照片上傳失敗，請重新整理頁面後再試一次` : "");
       patchLocal(space, (s) => ({
         ...s,
         items: {
@@ -323,6 +339,8 @@ export function useProjectInspection(projectId: string, round: number, stamp?: s
     removePhoto,
     inspectedBy,
     reloadInspection: load,
+    saveError,
+    clearSaveError: () => setSaveError(""),
     loading,
     saving,
   };

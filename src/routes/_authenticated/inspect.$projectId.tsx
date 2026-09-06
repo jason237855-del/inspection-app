@@ -102,6 +102,8 @@ function InspectPage() {
     removePhoto,
     reloadInspection,
     inspectedBy,
+    saveError,
+    clearSaveError,
     loading,
     saving,
   } = useProjectInspection(projectId, currentRound, stamp);
@@ -446,6 +448,14 @@ function InspectPage() {
       </header>
 
       <main className="mx-auto max-w-4xl space-y-4 px-4 py-4">
+        {saveError && (
+          <div className="flex items-start justify-between gap-3 rounded-2xl border border-defect/30 bg-defect-soft p-4 text-sm text-defect">
+            <span>{saveError}</span>
+            <button type="button" onClick={clearSaveError} className="shrink-0 font-bold underline">
+              關閉
+            </button>
+          </div>
+        )}
         {(loading || checklist.loading) && (
           <p className="rounded-2xl border border-border bg-surface p-6 text-center text-sm text-muted-foreground">
             載入現場紀錄中…
