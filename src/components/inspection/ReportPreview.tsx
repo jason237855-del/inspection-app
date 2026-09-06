@@ -239,6 +239,15 @@ export function ReportPreview({
                   </thead>
                   <tbody>
                     {rows.map((row) => {
+                      if (row.kind === "section") {
+                        return (
+                          <tr key={row.key}>
+                            <td colSpan={5} className={`border-b border-border p-2 text-sm font-bold ${row.className}`}>
+                              {row.label}
+                            </td>
+                          </tr>
+                        );
+                      }
                       if (row.kind === "divider") {
                         return (
                           <tr key={row.key}>
@@ -262,7 +271,7 @@ export function ReportPreview({
                         );
                       }
                       return (
-                        <tr key={row.key} className={row.rowClass}>
+                        <tr key={row.key} className={`${row.rowClass} ${row.textClass}`}>
                           <td className="border-b border-border p-2 align-top">{row.index}.</td>
                           <td className="border-b border-border p-2 align-top">{row.spaceName}</td>
                           <td className="border-b border-border p-2 align-top">{row.categoryName}</td>
@@ -385,6 +394,7 @@ function ChapterTitle({ children }: { children: React.ReactNode }) {
 }
 
 type ChapterRow =
+  | { kind: "section"; key: string; label: string; className: string }
   | { kind: "divider"; key: string; spaceName: string }
   | {
       kind: "item";
@@ -395,23 +405,34 @@ type ChapterRow =
       title: string;
       result: string;
       rowClass: string;
+      textClass: string;
     }
   | { kind: "photos"; key: string; rowClass: string; photos: SpaceState["items"][string]["photos"] };
 
-/** Flattens a chapter's spaces into table rows: a divider naming each space,
- * then one row per item with a running number continuing across the whole
- * chapter (not reset per space), plus a photo row where applicable. */
+/** Flattens a chapter's spaces into table rows, in two passes: defect/na/
+ * pending items first (grouped by space), then pass items (also grouped by
+ * space) — so problems are never buried among "無異常" rows. Numbering runs
+ * continuously across both passes for the whole chapter. */
 function buildChapterRows(chapterSpaces: ReportSpace[], spaces: Record<string, SpaceState>): ChapterRow[] {
   const rows: ChapterRow[] = [];
   let n = 0;
-  for (const sp of chapterSpaces) {
-    const spaceState = spaces[sp.name] ?? emptySpace();
-    rows.push({ kind: "divider", key: `${sp.id}-divider`, spaceName: sp.name });
-    for (const cat of sp.categories) {
-      for (const item of cat.items) {
+
+  const addGroup = (label: string, className: string, matches: (status: ItemState["status"]) => boolean) => {
+    const groupRows: ChapterRow[] = [];
+    for (const sp of chapterSpaces) {
+      const spaceState = spaces[sp.name] ?? emptySpace();
+      const entries: { cat: ReportCategory; item: ReportItem; state: ItemState | undefined }[] = [];
+      for (const cat of sp.categories) {
+        for (const item of cat.items) {
+          const state = spaceState.items[item.id];
+          if (matches(state?.status ?? "pass")) entries.push({ cat, item, state });
+        }
+      }
+      if (!entries.length) continue;
+      groupRows.push({ kind: "divider", key: `${sp.id}-${label}-divider`, spaceName: sp.name });
+      for (const { cat, item, state } of entries) {
         n += 1;
-        const state = spaceState.items[item.id];
-        rows.push({
+        groupRows.push({
           kind: "item",
           key: item.id,
           index: n,
@@ -420,12 +441,20 @@ function buildChapterRows(chapterSpaces: ReportSpace[], spaces: Record<string, S
           title: item.title,
           result: resultTextFor(state),
           rowClass: rowClassFor(state),
+          textClass: state?.status === "defect" ? "text-defect font-semibold" : "",
         });
         if ((state?.photos.length ?? 0) > 0) {
-          rows.push({ kind: "photos", key: `${item.id}-photos`, rowClass: rowClassFor(state), photos: state!.photos });
+          groupRows.push({ kind: "photos", key: `${item.id}-photos`, rowClass: rowClassFor(state), photos: state!.photos });
         }
       }
     }
-  }
+    if (groupRows.length) {
+      rows.push({ kind: "section", key: `section-${label}`, label, className }, ...groupRows);
+    }
+  };
+
+  addGroup("缺失／不適用項目", "bg-defect-soft text-defect", (s) => s === "defect" || s === "na" || s === "pending");
+  addGroup("正常項目", "bg-pass-soft text-pass", (s) => s === "pass");
+
   return rows;
 }
