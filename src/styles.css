@@ -171,10 +171,12 @@
   #report-print-area * {
     visibility: visible;
   }
+  /* Deliberately NOT position:absolute — browsers paginate normal-flow
+     content across multiple pages but clip/blank out absolutely positioned
+     content that overflows a single page. The dialog wrapper's own
+     fixed/overflow/max-height is reset separately (see ReportPreview.tsx's
+     print: utility classes) so this can stay in normal document flow. */
   #report-print-area {
-    position: absolute;
-    left: 0;
-    top: 0;
     width: 100%;
   }
   .no-print {

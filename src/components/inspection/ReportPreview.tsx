@@ -76,7 +76,7 @@ export function ReportPreview({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[88vh] max-w-2xl overflow-y-auto">
+      <DialogContent className="max-h-[88vh] max-w-2xl overflow-y-auto print:static print:m-0 print:max-h-none print:w-full print:max-w-none print:translate-x-0 print:translate-y-0 print:overflow-visible print:border-none print:p-0 print:shadow-none">
         <DialogHeader className="no-print">
           <DialogTitle className="font-display text-xl">驗屋紀錄報告</DialogTitle>
         </DialogHeader>
