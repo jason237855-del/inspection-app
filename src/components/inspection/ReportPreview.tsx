@@ -163,8 +163,8 @@ export function ReportPreview({
   const tocEntries = [
     "封面",
     ...(planImages.length ? ["格局圖"] : []),
-    ...chapters.map((c) => c.type),
     ...(panels.length ? ["配電箱明細"] : []),
+    ...chapters.map((c) => c.type),
     ...(signatures["owner"] || signatures["inspector"] ? ["雙方簽名"] : []),
     ...(measurementRows.length ? ["空間尺寸總結"] : []),
   ];
@@ -216,6 +216,26 @@ export function ReportPreview({
               <div className="space-y-3">
                 {planImages.map((img) => (
                   <img key={img.id} src={img.url} alt={img.name} className="w-full rounded-xl border border-border" />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* ---------- 配電箱明細 ---------- */}
+          {panels.length > 0 && (
+            <section className="mb-6 print:break-inside-avoid">
+              <ChapterTitle>配電箱明細</ChapterTitle>
+              <div className="space-y-2">
+                {panels.map((p) => (
+                  <div key={p.id} className="rounded-lg bg-muted/40 p-3 text-sm">
+                    <p className="font-semibold">{p.name}</p>
+                    <p className="mt-1 text-muted-foreground">
+                      {p.amperage ? `額定電流 ${p.amperage}A` : ""}
+                      {p.wire_spec ? ` · 線徑 ${p.wire_spec}` : ""}
+                      {p.circuits != null ? ` · 迴路數 ${p.circuits}` : ""}
+                    </p>
+                    {p.note && <p className="mt-1 text-muted-foreground">{p.note}</p>}
+                  </div>
                 ))}
               </div>
             </section>
@@ -289,26 +309,6 @@ export function ReportPreview({
             <p className="mb-6 rounded-xl border border-border p-4 text-sm text-muted-foreground">
               這一輪目前沒有檢驗項目可列入報告。
             </p>
-          )}
-
-          {/* ---------- 配電箱明細 ---------- */}
-          {panels.length > 0 && (
-            <section className="mb-6 print:break-inside-avoid">
-              <ChapterTitle>配電箱明細</ChapterTitle>
-              <div className="space-y-2">
-                {panels.map((p) => (
-                  <div key={p.id} className="rounded-lg bg-muted/40 p-3 text-sm">
-                    <p className="font-semibold">{p.name}</p>
-                    <p className="mt-1 text-muted-foreground">
-                      {p.amperage ? `額定電流 ${p.amperage}A` : ""}
-                      {p.wire_spec ? ` · 線徑 ${p.wire_spec}` : ""}
-                      {p.circuits != null ? ` · 迴路數 ${p.circuits}` : ""}
-                    </p>
-                    {p.note && <p className="mt-1 text-muted-foreground">{p.note}</p>}
-                  </div>
-                ))}
-              </div>
-            </section>
           )}
 
           {/* ---------- 雙方簽名 ---------- */}
@@ -441,7 +441,7 @@ function buildChapterRows(chapterSpaces: ReportSpace[], spaces: Record<string, S
           title: item.title,
           result: resultTextFor(state),
           rowClass: rowClassFor(state),
-          textClass: state?.status === "defect" ? "text-defect font-semibold" : "",
+          textClass: state?.status === "defect" || state?.status === "na" ? "text-defect font-semibold" : "",
         });
         if ((state?.photos.length ?? 0) > 0) {
           groupRows.push({ kind: "photos", key: `${item.id}-photos`, rowClass: rowClassFor(state), photos: state!.photos });
