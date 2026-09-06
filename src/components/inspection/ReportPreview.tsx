@@ -291,12 +291,12 @@ export function ReportPreview({
                         );
                       }
                       return (
-                        <tr key={row.key} className={`${row.rowClass} ${row.textClass}`}>
+                        <tr key={row.key} className={row.rowClass}>
                           <td className="border-b border-border p-2 align-top">{row.index}.</td>
                           <td className="border-b border-border p-2 align-top">{row.spaceName}</td>
                           <td className="border-b border-border p-2 align-top">{row.categoryName}</td>
                           <td className="border-b border-border p-2 align-top">{row.title}</td>
-                          <td className="border-b border-border p-2 align-top">{row.result}</td>
+                          <td className={`border-b border-border p-2 align-top ${row.textClass}`}>{row.result}</td>
                         </tr>
                       );
                     })}
