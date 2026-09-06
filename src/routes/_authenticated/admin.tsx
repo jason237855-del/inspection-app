@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, Download, Loader2, ShieldCheck, Trash2, Users } from "lucide-react";
+import { ArrowLeft, Download, KeyRound, Loader2, ShieldCheck, Trash2, Users, X } from "lucide-react";
 import { BottomNav } from "@/components/BottomNav";
 import { DashboardLayoutSettings } from "@/components/admin/DashboardLayoutSettings";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,6 +10,7 @@ import {
   adminDeleteUser,
   adminExportData,
   adminListMembers,
+  adminSetPassword,
   adminSetRole,
   type Member,
 } from "@/lib/admin.functions";
@@ -42,6 +43,7 @@ function AdminPage() {
   const navigate = useNavigate();
   const listMembers = useServerFn(adminListMembers);
   const setRole = useServerFn(adminSetRole);
+  const setPassword = useServerFn(adminSetPassword);
   const deleteUser = useServerFn(adminDeleteUser);
   const exportData = useServerFn(adminExportData);
 
@@ -49,6 +51,7 @@ function AdminPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(true);
+  const [passwordTarget, setPasswordTarget] = useState<Member | null>(null);
 
   const load = async () => {
     setBusy(true);
@@ -84,6 +87,10 @@ function AdminPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "更新角色失敗");
     }
+  };
+
+  const changePassword = async (userId: string, password: string) => {
+    await setPassword({ data: { userId, password } });
   };
 
   const removeUser = async (m: Member) => {
@@ -204,13 +211,22 @@ function AdminPage() {
                       </span>
                     </td>
                     <td className="py-3">
-                      <button
-                        type="button"
-                        onClick={() => void removeUser(m)}
-                        className="inline-flex h-10 items-center gap-1 rounded-lg border border-border px-3 text-xs font-semibold text-defect"
-                      >
-                        <Trash2 className="h-4 w-4" />刪除
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setPasswordTarget(m)}
+                          className="inline-flex h-10 items-center gap-1 rounded-lg border border-border px-3 text-xs font-semibold"
+                        >
+                          <KeyRound className="h-4 w-4" />改密碼
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void removeUser(m)}
+                          className="inline-flex h-10 items-center gap-1 rounded-lg border border-border px-3 text-xs font-semibold text-defect"
+                        >
+                          <Trash2 className="h-4 w-4" />刪除
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -268,6 +284,91 @@ function AdminPage() {
       </main>
 
       <BottomNav isAdmin />
+
+      {passwordTarget && (
+        <SetPasswordModal
+          member={passwordTarget}
+          onClose={() => setPasswordTarget(null)}
+          onSubmit={(password) => changePassword(passwordTarget.id, password)}
+        />
+      )}
+    </div>
+  );
+}
+
+function SetPasswordModal({
+  member,
+  onClose,
+  onSubmit,
+}: {
+  member: Member;
+  onClose: () => void;
+  onSubmit: (password: string) => Promise<void>;
+}) {
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [done, setDone] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await onSubmit(password);
+      setDone(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "設定密碼失敗");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/50 px-4">
+      <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-6 shadow-card">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <h2 className="font-display text-lg font-bold">設定新密碼</h2>
+          <button type="button" onClick={onClose} aria-label="關閉" className="rounded-lg p-1 hover:bg-muted">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <p className="mb-4 text-sm text-muted-foreground">
+          為 {member.full_name || member.email} 直接設定新密碼，不需要透過 email 驗證。
+        </p>
+
+        {done ? (
+          <div className="space-y-4">
+            <p className="rounded-lg bg-pass-soft p-3 text-sm text-pass">密碼已更新，請告知該成員新密碼。</p>
+            <button type="button" onClick={onClose} className="h-12 w-full rounded-xl bg-primary text-sm font-bold text-primary-foreground">
+              我知道了
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={submit} className="space-y-3">
+            <label className="block">
+              <span className="field-label">新密碼</span>
+              <input
+                type="text"
+                required
+                minLength={6}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="mt-1 h-12 w-full rounded-lg border border-input bg-surface px-3 text-[16px] outline-none focus:border-ring"
+                placeholder="至少 6 碼"
+              />
+            </label>
+            {error && <p className="rounded-lg bg-defect-soft p-3 text-sm text-defect">{error}</p>}
+            <button
+              type="submit"
+              disabled={busy}
+              className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary text-sm font-bold text-primary-foreground disabled:opacity-60"
+            >
+              {busy && <Loader2 className="h-4 w-4 animate-spin" />}更新密碼
+            </button>
+          </form>
+        )}
+      </div>
     </div>
   );
 }

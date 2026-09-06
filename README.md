@@ -32,6 +32,8 @@ npm run dev
 
 <!-- 新記錄放最上面（新到舊）。格式：日期 + 做了什麼 + 為什麼。 -->
 
+- 2026-09-06：系統後台的團隊成員列表新增「改密碼」功能（`adminSetPassword` server function + 對應 UI），管理者可直接幫成員設定新密碼。原因：Supabase 內建 email 服務發信頻率限制很低，忘記密碼流程常常因為 rate limit 收不到重設信，需要不靠 email 也能重設密碼的管道。
+
 - 2026-09-06：新增本更新紀錄段落與 CLAUDE.md 規則，要求每次實質更新都要記一筆。原因：讓專案異動有可追溯的歷史。
 - 2026-09-06：修正新 Supabase 專案所有資料表缺少 `id` 欄位預設值（`gen_random_uuid()`）的問題，並修正 `ensure_membership` 函式改為「第一位註冊帳號自動成為管理員，之後為檢查員」。原因：先前建表時漏掉預設值，導致新增資料（建案件、上傳照片等）全部會失敗；角色指派邏輯也沒有照登入頁文案運作。
 - 2026-09-06：切換 Nitro 建置目標為 Vercel（`vite.config.ts` 加上 `nitro: { preset: "vercel" }`）。原因：原本 Lovable 預設會建置成 Cloudflare 格式，要部署到 Vercel 需要明確指定輸出格式。

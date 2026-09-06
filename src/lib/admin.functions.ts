@@ -63,6 +63,20 @@ export const adminSetRole = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const adminSetPassword = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { userId: string; password: string }) => input)
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    if (data.password.length < 6) throw new Error("密碼至少需要 6 碼");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(data.userId, {
+      password: data.password,
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
 export const adminDeleteUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { userId: string }) => input)
