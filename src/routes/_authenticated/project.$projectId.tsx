@@ -15,6 +15,7 @@ import {
   Plus,
   RefreshCw,
   Trash2,
+  TriangleAlert,
   Upload,
   Users,
   Video,
@@ -63,9 +64,13 @@ function ProjectOverviewPage() {
   const badge = p?.inspection_package || status.label;
   const currentRound = p?.current_round ?? 1;
   const canStartNextRound = o.metrics.pending === 0 && o.metrics.defect > 0;
+  const canForceStartNextRound = o.metrics.pending > 0;
 
-  const handleNextRound = async () => {
-    if (!window.confirm(`確定要開始「${roundLabel(currentRound + 1)}」嗎？會把目前所有缺失項目複製進下一輪複驗清單。`)) return;
+  const handleNextRound = async (force = false) => {
+    const confirmMsg = force
+      ? `目前還有 ${o.metrics.pending} 項未檢驗，這些項目不會帶入「${roundLabel(currentRound + 1)}」（之後也不會再出現在複驗清單上）。確定要跳過並強制開始嗎？`
+      : `確定要開始「${roundLabel(currentRound + 1)}」嗎？會把目前所有缺失項目複製進下一輪複驗清單。`;
+    if (!window.confirm(confirmMsg)) return;
     setStartingRound(true);
     try {
       await startNextRound(projectId, currentRound);
@@ -107,6 +112,17 @@ function ProjectOverviewPage() {
             >
               <RefreshCw className="h-3.5 w-3.5" />
               開始{roundLabel(currentRound + 1)}
+            </button>
+          )}
+          {canForceStartNextRound && (
+            <button
+              type="button"
+              onClick={() => void handleNextRound(true)}
+              disabled={startingRound}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-warn/30 bg-warn-soft px-3 text-xs font-bold text-warn disabled:opacity-60"
+            >
+              <TriangleAlert className="h-3.5 w-3.5" />
+              強制開始{roundLabel(currentRound + 1)}（{o.metrics.pending} 項未驗）
             </button>
           )}
         </div>
