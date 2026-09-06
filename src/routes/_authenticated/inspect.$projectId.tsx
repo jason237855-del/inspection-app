@@ -67,6 +67,7 @@ type ProjectInfo = {
   inspection_date: string | null;
   notes: string;
   current_round: number;
+  assigned_inspector: string | null;
 };
 
 /** A category name aggregated across every space that contains it. */
@@ -135,7 +136,7 @@ function InspectPage() {
   useEffect(() => {
     supabase
       .from("projects")
-      .select("name, client_name, client_phone, address, unit, developer, layout, total_ping, inspection_date, notes, current_round")
+      .select("name, client_name, client_phone, address, unit, developer, layout, total_ping, inspection_date, notes, current_round, assigned_inspector")
       .eq("id", projectId)
       .maybeSingle()
       .then(({ data }) => setProject((data as ProjectInfo) ?? null));
@@ -729,6 +730,7 @@ function InspectPage() {
         layout={project?.layout}
         totalPing={project?.total_ping}
         date={project?.inspection_date ?? ""}
+        assignedInspector={project?.assigned_inspector}
         round={currentRound}
         spaces={spaces}
         reportSpaces={reportSpaces}
